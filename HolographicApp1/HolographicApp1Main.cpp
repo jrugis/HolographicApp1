@@ -5,6 +5,7 @@
 #include <windows.graphics.directx.direct3d11.interop.h>
 #include <Collection.h>
 
+#include "Audio/OmnidirectionalSound.h"
 
 using namespace HolographicApp1;
 
@@ -13,6 +14,7 @@ using namespace Platform;
 using namespace Windows::Foundation;
 using namespace Windows::Foundation::Numerics;
 using namespace Windows::Graphics::Holographic;
+using namespace Windows::Media::SpeechRecognition;
 using namespace Windows::Perception::Spatial;
 using namespace Windows::UI::Input::Spatial;
 using namespace std::placeholders;

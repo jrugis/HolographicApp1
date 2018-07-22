@@ -18,6 +18,8 @@
 #include "Content\SpatialInputHandler.h"
 #endif
 
+#include "Audio/OmnidirectionalSound.h"
+
 // Updates, renders, and presents holographic content using Direct3D.
 namespace HolographicApp1
 {

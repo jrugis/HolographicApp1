@@ -79,7 +79,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Link>
-      <AdditionalDependencies>d2d1.lib; d3d11.lib; dxgi.lib; dwrite.lib; windowscodecs.lib; %(AdditionalDependencies); </AdditionalDependencies>
+      <AdditionalDependencies>d2d1.lib; d3d11.lib; dxgi.lib; dwrite.lib; windowscodecs.lib;  Mfuuid.lib; Mfplat.lib; %(AdditionalDependencies); </AdditionalDependencies>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories); $(VCInstallDir)\lib\store; $(VCInstallDir)\lib</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>mincore.lib;kernel32.lib;ole32.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
     </Link>
@@ -144,6 +144,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AppView.h" />
+    <ClInclude Include="Audio\AudioFileReader.h" />
+    <ClInclude Include="Audio\AudioStreamReader.h" />
+    <ClInclude Include="Audio\OmnidirectionalSound.h" />
+    <ClInclude Include="Audio\XAudio2Helpers.h" />
+    <ClInclude Include="Common\PrintWstringToDebugConsole.h" />
     <ClInclude Include="HolographicApp1Main.h" />
     <ClInclude Include="Common\DeviceResources.h" />
     <ClInclude Include="Common\DirectXHelper.h" />
@@ -156,6 +161,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AppView.cpp" />
+    <ClCompile Include="Audio\AudioFileReader.cpp" />
+    <ClCompile Include="Audio\AudioStreamReader.cpp" />
+    <ClCompile Include="Audio\OmnidirectionalSound.cpp" />
     <ClCompile Include="HolographicApp1Main.cpp" />
     <ClCompile Include="Common\DeviceResources.cpp" />
     <ClCompile Include="Common\CameraResources.cpp" />
@@ -188,6 +196,10 @@
       <ShaderType>Geometry</ShaderType>
       <ShaderModel>5.0</ShaderModel>
     </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Media Include="Audio\BasicListeningEarcon.wav" />
+    <Media Include="Audio\BasicResultsEarcon.wav" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

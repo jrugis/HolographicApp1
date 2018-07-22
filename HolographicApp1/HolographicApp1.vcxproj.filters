@@ -53,10 +53,12 @@
     <Image Include="Assets\Wide310x150Logo.scale-200.png">
       <Filter>Assets</Filter>
     </Image>
+    <Filter Include="Audio">
+      <UniqueIdentifier>{96df5719-e9d3-458a-82b0-3d8330f6555a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
-    <ClCompile Include="HolographicAppMain.cpp" />
     <ClCompile Include="AppView.cpp" />
     <ClCompile Include="Content\SpatialInputHandler.cpp">
       <Filter>Content</Filter>
@@ -64,10 +66,19 @@
     <ClCompile Include="Content\SpinningCubeRenderer.cpp">
       <Filter>Content</Filter>
     </ClCompile>
+    <ClCompile Include="HolographicApp1Main.cpp" />
+    <ClCompile Include="Audio\AudioFileReader.cpp">
+      <Filter>Audio</Filter>
+    </ClCompile>
+    <ClCompile Include="Audio\AudioStreamReader.cpp">
+      <Filter>Audio</Filter>
+    </ClCompile>
+    <ClCompile Include="Audio\OmnidirectionalSound.cpp">
+      <Filter>Audio</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
-    <ClInclude Include="HolographicAppMain.h" />
     <ClInclude Include="AppView.h" />
     <ClInclude Include="Content\SpatialInputHandler.h">
       <Filter>Content</Filter>
@@ -77,6 +88,22 @@
     </ClInclude>
     <ClInclude Include="Content\ShaderStructures.h">
       <Filter>Content</Filter>
+    </ClInclude>
+    <ClInclude Include="HolographicApp1Main.h" />
+    <ClInclude Include="Audio\AudioFileReader.h">
+      <Filter>Audio</Filter>
+    </ClInclude>
+    <ClInclude Include="Audio\AudioStreamReader.h">
+      <Filter>Audio</Filter>
+    </ClInclude>
+    <ClInclude Include="Audio\OmnidirectionalSound.h">
+      <Filter>Audio</Filter>
+    </ClInclude>
+    <ClInclude Include="Audio\XAudio2Helpers.h">
+      <Filter>Audio</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\PrintWstringToDebugConsole.h">
+      <Filter>Common</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -98,5 +125,13 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="HolographicApp1_TemporaryKey.pfx" />
+  </ItemGroup>
+  <ItemGroup>
+    <Media Include="Audio\BasicListeningEarcon.wav">
+      <Filter>Audio</Filter>
+    </Media>
+    <Media Include="Audio\BasicResultsEarcon.wav">
+      <Filter>Audio</Filter>
+    </Media>
   </ItemGroup>
 </Project>
