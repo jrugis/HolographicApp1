@@ -10,7 +10,7 @@
 //********************************************************* 
 
 
-namespace HolographicVoiceInput {
+namespace HolographicApp1 {
 
     static void PrintWstringToDebugConsole(std::wstring message)
     {

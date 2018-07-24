@@ -2,6 +2,7 @@
 cbuffer ModelConstantBuffer : register(b0)
 {
     float4x4 model;
+	float4 color;
 };
 
 // A constant buffer that stores each set of view and projection matrices in column-major format.
@@ -31,28 +32,29 @@ struct VertexShaderOutput
 // Simple shader to do vertex processing on the GPU.
 VertexShaderOutput main(VertexShaderInput input)
 {
-    VertexShaderOutput output;
-    float4 pos = float4(input.pos, 1.0f);
+	VertexShaderOutput output;
+	float4 pos = float4(input.pos, 1.0f);
 
-    // Note which view this vertex has been sent to. Used for matrix lookup.
-    // Taking the modulo of the instance ID allows geometry instancing to be used
-    // along with stereo instanced drawing; in that case, two copies of each 
-    // instance would be drawn, one for left and one for right.
-    int idx = input.instId % 2;
+	// Note which view this vertex has been sent to. Used for matrix lookup.
+	// Taking the modulo of the instance ID allows geometry instancing to be used
+	// along with stereo instanced drawing; in that case, two copies of each 
+	// instance would be drawn, one for left and one for right.
+	int idx = input.instId % 2;
 
-    // Transform the vertex position into world space.
-    pos = mul(pos, model);
+	// Transform the vertex position into world space.
+	pos = mul(pos, model);
 
-    // Correct for perspective and project the vertex position onto the screen.
-    pos = mul(pos, viewProjection[idx]);
-    output.pos = (min16float4)pos;
+	// Correct for perspective and project the vertex position onto the screen.
+	pos = mul(pos, viewProjection[idx]);
+	output.pos = (min16float4)pos;
 
-    // Pass the color through without modification.
-    output.color = input.color;
+	// Pass the color through without modification.
+	//output.color = input.color;
+	output.color = min16float3(color.xyz);
 
-    // Set the instance ID. The pass-through geometry shader will set the
-    // render target array index to whatever value is set here.
-    output.viewId = idx;
+	// Set the instance ID. The pass-through geometry shader will set the
+	// render target array index to whatever value is set here.
+	output.viewId = idx;
 
-    return output;
+	return output;
 }

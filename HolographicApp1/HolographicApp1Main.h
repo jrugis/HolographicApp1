@@ -1,23 +1,9 @@
 #pragma once
 
-//
-// Comment out this preprocessor definition to disable all of the
-// sample content.
-//
-// To remove the content after disabling it:
-//     * Remove the unused code from your app's Main class.
-//     * Delete the Content folder provided with this template.
-//
-#define DRAW_SAMPLE_CONTENT
-
 #include "Common\DeviceResources.h"
 #include "Common\StepTimer.h"
-
-#ifdef DRAW_SAMPLE_CONTENT
 #include "Content\SpinningCubeRenderer.h"
 #include "Content\SpatialInputHandler.h"
-#endif
-
 #include "Audio/OmnidirectionalSound.h"
 
 // Updates, renders, and presents holographic content using Direct3D.
@@ -48,7 +34,36 @@ namespace HolographicApp1
         virtual void OnDeviceRestored();
 
     private:
-        // Asynchronously creates resources for new holographic cameras.
+		// Process continuous speech recognition results.
+		void OnResultGenerated(
+			Windows::Media::SpeechRecognition::SpeechContinuousRecognitionSession ^sender,
+			Windows::Media::SpeechRecognition::SpeechContinuousRecognitionResultGeneratedEventArgs ^args
+		);
+
+		// Recognize when conditions might impact speech recognition quality.
+		void OnSpeechQualityDegraded(
+			Windows::Media::SpeechRecognition::SpeechRecognizer^ recognizer,
+			Windows::Media::SpeechRecognition::SpeechRecognitionQualityDegradingEventArgs^ args
+		);
+
+		// Initializes the speech command list.
+		void InitializeSpeechCommandList();
+
+		// Initializes a speech recognizer.
+		bool InitializeSpeechRecognizer();
+
+		// Provides a voice prompt, before starting the scenario.
+		void BeginVoiceUIPrompt();
+		void PlayRecognitionBeginSound();
+		void PlayRecognitionSound();
+
+		// Creates a speech command recognizer, and starts listening.
+		Concurrency::task<bool> StartRecognizeSpeechCommands();
+
+		// Resets the speech recognizer, if one exists.
+		Concurrency::task<void> StopCurrentRecognizerIfExists();
+
+		// Asynchronously creates resources for new holographic cameras.
         void OnCameraAdded(
             Windows::Graphics::Holographic::HolographicSpace^ sender,
             Windows::Graphics::Holographic::HolographicSpaceCameraAddedEventArgs^ args);
@@ -68,14 +83,12 @@ namespace HolographicApp1
         // and when tearing down AppMain.
         void UnregisterHolographicEventHandlers();
 
-#ifdef DRAW_SAMPLE_CONTENT
         // Renders a colorful holographic cube that's 20 centimeters wide. This sample content
         // is used to demonstrate world-locked rendering.
         std::unique_ptr<SpinningCubeRenderer>                           m_spinningCubeRenderer;
 
         // Listens for the Pressed spatial input event.
         std::shared_ptr<SpatialInputHandler>                            m_spatialInputHandler;
-#endif
 
         // Cached pointer to device resources.
         std::shared_ptr<DX::DeviceResources>                            m_deviceResources;
@@ -96,5 +109,28 @@ namespace HolographicApp1
         Windows::Foundation::EventRegistrationToken                     m_cameraAddedToken;
         Windows::Foundation::EventRegistrationToken                     m_cameraRemovedToken;
         Windows::Foundation::EventRegistrationToken                     m_locatabilityChangedToken;
-    };
+		Windows::Foundation::EventRegistrationToken                     m_speechRecognizerResultEventToken;
+		Windows::Foundation::EventRegistrationToken                     m_speechRecognitionQualityDegradedToken;
+
+		bool                                                            m_listening;
+
+		// Speech recognizer.
+		Windows::Media::SpeechRecognition::SpeechRecognizer^            m_speechRecognizer;
+
+		// Maps commands to color data.
+		// We will create a Vector of the key values in this map for use as speech commands.
+		Platform::Collections::Map<Platform::String^, Windows::Foundation::Numerics::float4>^ m_speechCommandData;
+
+		// The most recent speech command received.
+		Platform::String^                                               m_lastCommand;
+
+		// Handles playback of speech synthesis audio.
+		OmnidirectionalSound                                            m_speechSynthesisSound;
+		OmnidirectionalSound                                            m_recognitionSound;
+		OmnidirectionalSound                                            m_startRecognitionSound;
+
+		bool                                                            m_waitingForSpeechPrompt = false;
+		bool                                                            m_waitingForSpeechCue = false;
+		float                                                           m_secondsUntilSoundIsComplete = 0.f;
+	};
 }

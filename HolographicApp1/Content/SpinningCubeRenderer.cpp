@@ -12,6 +12,10 @@ using namespace Windows::UI::Input::Spatial;
 SpinningCubeRenderer::SpinningCubeRenderer(const std::shared_ptr<DX::DeviceResources>& deviceResources) :
     m_deviceResources(deviceResources)
 {
+    // For speech example.
+    // Set the initial color to white.
+    m_modelConstantBufferData.color = { 1.f, 1.f, 1.f, 1.f };
+	
     CreateDeviceDependentResources();
 }
 
@@ -219,7 +223,7 @@ void SpinningCubeRenderer::CreateDeviceDependentResources()
                 )
             );
 
-        const CD3D11_BUFFER_DESC constantBufferDesc(sizeof(ModelConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
+        const CD3D11_BUFFER_DESC constantBufferDesc(sizeof(ModelColorConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
         DX::ThrowIfFailed(
             m_deviceResources->GetD3DDevice()->CreateBuffer(
                 &constantBufferDesc,
@@ -307,6 +311,7 @@ void SpinningCubeRenderer::CreateDeviceDependentResources()
         }};
 
         m_indexCount = static_cast<unsigned int>(cubeIndices.size());
+
 
         D3D11_SUBRESOURCE_DATA indexBufferData  = {0};
         indexBufferData.pSysMem                 = cubeIndices.data();

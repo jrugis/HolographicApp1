@@ -1,3 +1,7 @@
+//
+//
+//
+
 #include "pch.h"
 #include "HolographicApp1Main.h"
 #include "Common\DirectXHelper.h"
@@ -25,6 +29,236 @@ HolographicApp1Main::HolographicApp1Main(const std::shared_ptr<DX::DeviceResourc
 {
     // Register to be notified if the device is lost or recreated.
     m_deviceResources->RegisterDeviceNotify(this);
+
+	// Initialize the map of speech commands to actions - in this case, color values.
+	InitializeSpeechCommandList();
+}
+
+void HolographicApp1Main::InitializeSpeechCommandList()
+{
+	m_lastCommand = nullptr;
+	m_listening = false;
+	m_speechCommandData = ref new Platform::Collections::Map<String^, float4>();
+
+	m_speechCommandData->Insert(L"white", float4(1.0f, 1.0f, 1.0f, 1.f));
+	m_speechCommandData->Insert(L"grey", float4(0.5f, 0.5f, 0.5f, 1.f));
+	m_speechCommandData->Insert(L"green", float4(0.0f, 1.0f, 0.0f, 1.f));
+	m_speechCommandData->Insert(L"black", float4(0.1f, 0.1f, 0.1f, 1.f));
+	m_speechCommandData->Insert(L"red", float4(1.0f, 0.0f, 0.0f, 1.f));
+	m_speechCommandData->Insert(L"yellow", float4(1.0f, 1.0f, 0.0f, 1.f));
+	m_speechCommandData->Insert(L"cyan", float4(0.0f, 1.0f, 1.0f, 1.f));
+	m_speechCommandData->Insert(L"blue", float4(0.0f, 0.0f, 1.0f, 1.f));
+	m_speechCommandData->Insert(L"magenta", float4(1.0f, 0.0f, 1.0f, 1.f));
+
+	// You can use non-dictionary words as speech commands.
+	m_speechCommandData->Insert(L"Violet", float4(0.5f, 0.1f, 1.f, 1.f));
+}
+
+void HolographicApp1Main::BeginVoiceUIPrompt()
+{
+	// RecognizeWithUIAsync provides speech recognition begin and end prompts, but it does not provide
+	// synthesized speech prompts. Instead, you should provide your own speech prompts when requesting
+	// phrase input.
+	// Here is an example of how to do that with a speech synthesizer. You could also use a pre-recorded 
+	// voice clip, a visual UI, or other indicator of what to say.
+	auto speechSynthesizer = ref new Windows::Media::SpeechSynthesis::SpeechSynthesizer();
+
+	StringReference voicePrompt;
+
+	// A command list is used to continuously look for one-word commands.
+	// You need some way for the user to know what commands they can say. In this example, we provide
+	// verbal instructions; you could also use graphical UI, etc.
+	voicePrompt = L"Say the name of a color, at any time, to change the color of the cube.";
+
+	// Kick off speech synthesis.
+	create_task(speechSynthesizer->SynthesizeTextToStreamAsync(voicePrompt), task_continuation_context::use_current())
+		.then([this, speechSynthesizer](task<Windows::Media::SpeechSynthesis::SpeechSynthesisStream^> synthesisStreamTask)
+	{
+		try
+		{
+			// The speech synthesis is sent as a byte stream.
+			Windows::Media::SpeechSynthesis::SpeechSynthesisStream^ stream = synthesisStreamTask.get();
+
+			// We can initialize an XAudio2 voice using that byte stream.
+			// Here, we use it to play an HRTF audio effect.
+			auto hr = m_speechSynthesisSound.Initialize(stream, 0);
+			if (SUCCEEDED(hr))
+			{
+				m_speechSynthesisSound.SetEnvironment(HrtfEnvironment::Small);
+				m_speechSynthesisSound.Start();
+
+				// Amount of time to pause after the audio prompt is complete, before listening 
+				// for speech input.
+				static const float bufferTime = 0.15f;
+
+				// Wait until the prompt is done before listening.
+				m_secondsUntilSoundIsComplete = m_speechSynthesisSound.GetDuration() + bufferTime;
+				m_waitingForSpeechPrompt = true;
+			}
+		}
+		catch (Exception^ exception)
+		{
+			PrintWstringToDebugConsole(
+				std::wstring(L"Exception while trying to synthesize speech: ") +
+				exception->Message->Data() +
+				L"\n"
+			);
+
+			// Handle exceptions here.
+		}
+	});
+}
+
+void HolographicApp1Main::PlayRecognitionBeginSound()
+{
+	// The user needs a cue to begin speaking. We will play this sound effect just before starting 
+	// the recognizer.
+	auto hr = m_startRecognitionSound.GetInitializationStatus();
+	if (SUCCEEDED(hr))
+	{
+		m_startRecognitionSound.SetEnvironment(HrtfEnvironment::Small);
+		m_startRecognitionSound.Start();
+
+		// Wait until the audible cue is done before starting to listen.
+		m_secondsUntilSoundIsComplete = m_startRecognitionSound.GetDuration();
+		m_waitingForSpeechCue = true;
+	}
+}
+
+void HolographicApp1Main::PlayRecognitionSound()
+{
+	// The user should be given a cue when recognition is complete. 
+	auto hr = m_recognitionSound.GetInitializationStatus();
+	if (SUCCEEDED(hr))
+	{
+		// re-initialize the sound so it can be replayed.
+		m_recognitionSound.Initialize(L"Audio//BasicResultsEarcon.wav", 0);
+		m_recognitionSound.SetEnvironment(HrtfEnvironment::Small);
+
+		m_recognitionSound.Start();
+	}
+}
+
+Concurrency::task<void> HolographicApp1Main::StopCurrentRecognizerIfExists()
+{
+	if (m_speechRecognizer != nullptr)
+	{
+		return create_task(m_speechRecognizer->StopRecognitionAsync()).then([this]()
+		{
+			m_speechRecognizer->RecognitionQualityDegrading -= m_speechRecognitionQualityDegradedToken;
+
+			if (m_speechRecognizer->ContinuousRecognitionSession != nullptr)
+			{
+				m_speechRecognizer->ContinuousRecognitionSession->ResultGenerated -= m_speechRecognizerResultEventToken;
+			}
+		});
+	}
+	else
+	{
+		return create_task([this]() {});
+	}
+}
+
+bool HolographicApp1Main::InitializeSpeechRecognizer()
+{
+	m_speechRecognizer = ref new SpeechRecognizer();
+
+	if (!m_speechRecognizer)
+	{
+		return false;
+	}
+
+	m_speechRecognitionQualityDegradedToken = m_speechRecognizer->RecognitionQualityDegrading +=
+		ref new TypedEventHandler<SpeechRecognizer^, SpeechRecognitionQualityDegradingEventArgs^>(
+			std::bind(&HolographicApp1Main::OnSpeechQualityDegraded, this, _1, _2)
+			);
+
+	m_speechRecognizerResultEventToken = m_speechRecognizer->ContinuousRecognitionSession->ResultGenerated +=
+		ref new TypedEventHandler<SpeechContinuousRecognitionSession^, SpeechContinuousRecognitionResultGeneratedEventArgs^>(
+			std::bind(&HolographicApp1Main::OnResultGenerated, this, _1, _2)
+			);
+
+	return true;
+}
+
+task<bool> HolographicApp1Main::StartRecognizeSpeechCommands()
+{
+	return StopCurrentRecognizerIfExists().then([this]()
+	{
+		if (!InitializeSpeechRecognizer())
+		{
+			return task_from_result<bool>(false);
+		}
+
+		// Here, we compile the list of voice commands by reading them from the map.
+		Platform::Collections::Vector<String^>^ speechCommandList = ref new Platform::Collections::Vector<String^>();
+		for each (auto pair in m_speechCommandData)
+		{
+			// The speech command string is what we are looking for here. Later, we can use the
+			// recognition result for this string to look up a color value.
+			auto command = pair->Key;
+
+			// Add it to the list.
+			speechCommandList->Append(command);
+		}
+
+		SpeechRecognitionListConstraint^ spConstraint = ref new SpeechRecognitionListConstraint(speechCommandList);
+		m_speechRecognizer->Constraints->Clear();
+		m_speechRecognizer->Constraints->Append(spConstraint);
+		return create_task(m_speechRecognizer->CompileConstraintsAsync()).then([this](task<SpeechRecognitionCompilationResult^> previousTask)
+		{
+			try
+			{
+				SpeechRecognitionCompilationResult^ compilationResult = previousTask.get();
+
+				if (compilationResult->Status == SpeechRecognitionResultStatus::Success)
+				{
+					// If compilation succeeds, we can start listening for results.
+					return create_task(m_speechRecognizer->ContinuousRecognitionSession->StartAsync()).then([this](task<void> startAsyncTask) {
+
+						try
+						{
+							// StartAsync may throw an exception if your app doesn't have Microphone permissions. 
+							// Make sure they're caught and handled appropriately (otherwise the app may silently not work as expected)
+							startAsyncTask.get();
+							return true;
+						}
+						catch (Exception^ exception)
+						{
+							PrintWstringToDebugConsole(
+								std::wstring(L"Exception while trying to start speech Recognition: ") +
+								exception->Message->Data() +
+								L"\n"
+							);
+
+							return false;
+						}
+					});
+				}
+				else
+				{
+					OutputDebugStringW(L"Could not initialize constraint-based speech engine!\n");
+
+					// Handle errors here.
+					return create_task([this] {return false; });
+				}
+			}
+			catch (Exception^ exception)
+			{
+				// Note that if you get an "Access is denied" exception, you might need to enable the microphone 
+				// privacy setting on the device and/or add the microphone capability to your app manifest.
+
+				PrintWstringToDebugConsole(
+					std::wstring(L"Exception while trying to initialize speech command list:") +
+					exception->Message->Data() +
+					L"\n"
+				);
+
+				// Handle exceptions here.
+				return create_task([this] {return false; });
+			}
+		});
+	});
 }
 
 void HolographicApp1Main::SetHolographicSpace(HolographicSpace^ holographicSpace)
@@ -37,12 +271,10 @@ void HolographicApp1Main::SetHolographicSpace(HolographicSpace^ holographicSpace
     // TODO: Add code here to initialize your holographic content.
     //
 
-#ifdef DRAW_SAMPLE_CONTENT
     // Initialize the sample hologram.
     m_spinningCubeRenderer = std::make_unique<SpinningCubeRenderer>(m_deviceResources);
 
     m_spatialInputHandler = std::make_unique<SpatialInputHandler>();
-#endif
 
     // Use the default SpatialLocator to track the motion of the device.
     m_locator = SpatialLocator::GetDefault();
@@ -94,6 +326,12 @@ void HolographicApp1Main::SetHolographicSpace(HolographicSpace^ holographicSpace
     //   indicates to be of special interest. Anchor positions do not drift, but can be corrected; the
     //   anchor will use the corrected position starting in the next frame after the correction has
     //   occurred.
+	// Preload audio assets for audio cues.
+	m_startRecognitionSound.Initialize(L"Audio//BasicListeningEarcon.wav", 0);
+	m_recognitionSound.Initialize(L"Audio//BasicResultsEarcon.wav", 0);
+
+	// Begin the code sample scenario.
+	BeginVoiceUIPrompt();
 }
 
 void HolographicApp1Main::UnregisterHolographicEventHandlers()
@@ -154,7 +392,6 @@ HolographicFrame^ HolographicApp1Main::Update()
     // for creating the stereo view matrices when rendering the sample content.
     SpatialCoordinateSystem^ currentCoordinateSystem = m_referenceFrame->CoordinateSystem;
 
-#ifdef DRAW_SAMPLE_CONTENT
     // Check for new input state since the last frame.
     SpatialInteractionSourceState^ pointerState = m_spatialInputHandler->CheckForInput();
     if (pointerState != nullptr)
@@ -165,7 +402,28 @@ HolographicFrame^ HolographicApp1Main::Update()
             pointerState->TryGetPointerPose(currentCoordinateSystem)
             );
     }
-#endif
+
+	// Check for new speech input since the last frame.
+	if (m_lastCommand != nullptr)
+	{
+		auto command = m_lastCommand;
+		m_lastCommand = nullptr;
+
+		// Check to see if the spoken word or phrase, matches up with any of the speech
+		// commands in our speech command map.
+		for each (auto& iter in m_speechCommandData)
+		{
+			std::wstring lastCommandString = command->Data();
+			std::wstring listCommandString = iter->Key->Data();
+
+			if (lastCommandString.find(listCommandString) != std::wstring::npos)
+			{
+				// If so, we can set the cube to the color that was spoken.
+				m_spinningCubeRenderer->SetColor(iter->Value);
+				break;
+			}
+		}
+	}
 
     m_timer.Tick([&] ()
     {
@@ -177,9 +435,22 @@ HolographicFrame^ HolographicApp1Main::Update()
         // run as many times as needed to get to the current step.
         //
 
-#ifdef DRAW_SAMPLE_CONTENT
         m_spinningCubeRenderer->Update(m_timer);
-#endif
+
+		// Wait to listen for speech input until the audible UI prompts are complete.
+		if ((m_waitingForSpeechPrompt == true) &&
+			((m_secondsUntilSoundIsComplete -= static_cast<float>(m_timer.GetElapsedSeconds())) <= 0.f))
+		{
+			m_waitingForSpeechPrompt = false;
+			PlayRecognitionBeginSound();
+		}
+		else if ((m_waitingForSpeechCue == true) &&
+			((m_secondsUntilSoundIsComplete -= static_cast<float>(m_timer.GetElapsedSeconds())) <= 0.f))
+		{
+			m_waitingForSpeechCue = false;
+			m_secondsUntilSoundIsComplete = 0.f;
+			StartRecognizeSpeechCommands();
+		}
     });
 
     // We complete the frame update by using information about our content positioning
@@ -187,7 +458,6 @@ HolographicFrame^ HolographicApp1Main::Update()
 
     for (auto cameraPose : prediction->CameraPoses)
     {
-#ifdef DRAW_SAMPLE_CONTENT
         // The HolographicCameraRenderingParameters class provides access to set
         // the image stabilization parameters.
         HolographicCameraRenderingParameters^ renderingParameters = holographicFrame->GetRenderingParameters(cameraPose);
@@ -204,7 +474,6 @@ HolographicFrame^ HolographicApp1Main::Update()
             currentCoordinateSystem,
             m_spinningCubeRenderer->GetPosition()
             );
-#endif
     }
 
     // The holographic frame will be used to get up-to-date view and projection matrices and
@@ -285,14 +554,12 @@ bool HolographicApp1Main::Render(Windows::Graphics::Holographic::HolographicFram
             // Attach the view/projection constant buffer for this camera to the graphics pipeline.
             bool cameraActive = pCameraResources->AttachViewProjectionBuffer(m_deviceResources);
 
-#ifdef DRAW_SAMPLE_CONTENT
             // Only render world-locked content when positional tracking is active.
             if (cameraActive)
             {
                 // Draw the sample hologram.
                 m_spinningCubeRenderer->Render();
             }
-#endif
             atLeastOneCameraRendered = true;
         }
 
@@ -324,18 +591,14 @@ void HolographicApp1Main::LoadAppState()
 // need to be released before this method returns.
 void HolographicApp1Main::OnDeviceLost()
 {
-#ifdef DRAW_SAMPLE_CONTENT
     m_spinningCubeRenderer->ReleaseDeviceDependentResources();
-#endif
 }
 
 // Notifies classes that use Direct3D device resources that the device resources
 // may now be recreated.
 void HolographicApp1Main::OnDeviceRestored()
 {
-#ifdef DRAW_SAMPLE_CONTENT
     m_spinningCubeRenderer->CreateDeviceDependentResources();
-#endif
 }
 
 void HolographicApp1Main::OnLocatabilityChanged(SpatialLocator^ sender, Object^ args)
@@ -422,4 +685,67 @@ void HolographicApp1Main::OnCameraRemoved(
     // deallocating resources for this camera. At 60 frames per second this wait should
     // not take long.
     m_deviceResources->RemoveHolographicCamera(args->Camera);
+}
+
+
+// For speech example.
+// Change the cube color, if we get a valid result.
+void HolographicApp1Main::OnResultGenerated(SpeechContinuousRecognitionSession ^sender, SpeechContinuousRecognitionResultGeneratedEventArgs ^args)
+{
+	// For our list of commands, medium confidence is good enough. 
+	// We also accept results that have high confidence.
+	if ((args->Result->Confidence == SpeechRecognitionConfidence::High) ||
+		(args->Result->Confidence == SpeechRecognitionConfidence::Medium))
+	{
+		m_lastCommand = args->Result->Text;
+
+		// When the debugger is attached, we can print information to the debug console.
+		PrintWstringToDebugConsole(
+			std::wstring(L"Last command was: ") +
+			m_lastCommand->Data() +
+			L"\n"
+		);
+
+		// Play a sound to indicate a command was understood.
+		PlayRecognitionSound();
+	}
+	else
+	{
+		OutputDebugStringW(L"Recognition confidence not high enough.\n");
+	}
+}
+
+void HolographicApp1Main::OnSpeechQualityDegraded(Windows::Media::SpeechRecognition::SpeechRecognizer^ recognizer, Windows::Media::SpeechRecognition::SpeechRecognitionQualityDegradingEventArgs^ args)
+{
+	switch (args->Problem)
+	{
+	case SpeechRecognitionAudioProblem::TooFast:
+		OutputDebugStringW(L"The user spoke too quickly.\n");
+		break;
+
+	case SpeechRecognitionAudioProblem::TooSlow:
+		OutputDebugStringW(L"The user spoke too slowly.\n");
+		break;
+
+	case SpeechRecognitionAudioProblem::TooQuiet:
+		OutputDebugStringW(L"The user spoke too softly.\n");
+		break;
+
+	case SpeechRecognitionAudioProblem::TooLoud:
+		OutputDebugStringW(L"The user spoke too loudly.\n");
+		break;
+
+	case SpeechRecognitionAudioProblem::TooNoisy:
+		OutputDebugStringW(L"There is too much noise in the signal.\n");
+		break;
+
+	case SpeechRecognitionAudioProblem::NoSignal:
+		OutputDebugStringW(L"There is no signal.\n");
+		break;
+
+	case SpeechRecognitionAudioProblem::None:
+	default:
+		OutputDebugStringW(L"An error was reported with no information.\n");
+		break;
+	}
 }
